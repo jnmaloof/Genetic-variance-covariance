@@ -1,37 +1,44 @@
-Estimating Genetic Variance CoVariance Matrix
+Estimating Genetic Variance Covariance Matrix
 ========================================================
 author: Julin Maloof
 date: Feb 12, 2019
-autosize: true
+width: 1600
+height: 900
 
 ```{r, include=FALSE}
 library(tidyverse)
+set.seed(555)
 ```
 
+Github Repository
+==================
+This presentation is written in R and is available at:
+
+[https://github.com/jnmaloof/Genetic-variance-covariance](https://github.com/jnmaloof/Genetic-variance-covariance)
 
 univariate and multivariate breeders equations
 ==========
-Remember the breeders equations:
+Remember the breeder's equations:
 
 ### Univariate: 
 
-$$ r = h^2 s $$
+$r = h^2 s$
 
-where   $\: h^2 = \frac{VarA}{VarG}$ 
+where   $\: h^2 = \frac{VarA}{VarP}$ 
 
 univariate and multivariate breeders equations
 ==========
-Remember the breeders equations:
+Remember the breeder's equations:
 
 ### Univariate: 
 
-$$ r = h^2 s $$
+$r = h^2 s$
 
-where   $\: h^2 = \frac{VarA}{VarG}$ 
+where   $\: h^2 = \frac{VarA}{VarP}$ 
 
-### multivariate:
+### Multivariate:
 
-$$\Delta Z = G P^{-1} s $$
+$\Delta Z = G P^{-1} s$
 
 Where $G$ is the Genetic variance co-variance matrix and $P$ is the Phenotypic variance co-variance matrix.
 
@@ -39,42 +46,57 @@ Thus $\, G P^{-1}$ is the multivariate equivalent of $h^2$
 
 heritability
 ============
+incremental: true
+
 * Given the relationship between $\, h^2$ and $\, GP^{-1}$, let's start with calcualting heritability.
 * Heritabilty can be calcualted using the resemblence between relatives.
 * One common method is to use offspring and midparent values
-    - Consider proportion of alleles in offspring that will be identical by descent (IBD).
-    - 4 alleles (2 from each parent) contribute to mid-parent value.  Each progeny will get 2 of these 4
-    - Thus, the covariance between offspring and midparent estimates $\,\frac{1}{2}VarA$
-    - $h^2$ can be calculated as $\frac{2*Cov(midparent, offspring)}{VarP}$
+- Consider proportion of alleles in offspring that will be identical by descent (IBD).
+- 4 alleles (2 from each parent) contribute to mid-parent value.  Each progeny will get 2 of these 4
+- Thus, the covariance between offspring and midparent estimates $\,\frac{1}{2}VarA$
+- $h^2$ can be calculated as $\: h^2 = \frac{VarA}{VarP} = \frac{2*Cov(midparent, offspring)}{VarP}$
 
 
 heritability simulate population
 ================================
 simple 1 gene case
 ```{r}
-size <- 100
-allele.freq <- 0.5
-allelic.effect <- 5
+size <- 200
+allele.freq1 <- 0.5
+allelic.effect1 <- 5
 VarE <- 5
-pop <- tibble(
-  cross=1:size,
-  p1a1=sample(0:1, size = size, replace = TRUE, prob = c(allele.freq, 1-allele.freq)),
-  p1a2=sample(0:1, size = size, replace = TRUE, prob = c(allele.freq, 1-allele.freq)),
-  p2a1=sample(0:1, size = size, replace = TRUE, prob = c(allele.freq, 1-allele.freq)),
-  p2a2=sample(0:1, size = size, replace = TRUE, prob = c(allele.freq, 1-allele.freq)))
+pop <- cbind(cross=1:size,
+              matrix(sample(0:1, size=4*size, replace = TRUE, prob = c(allele.freq1, 1-allele.freq1)),
+                     ncol=4,
+                     dimnames=list(NULL, c("p1a1_g1", "p1a2_g1", "p2a1_g1", "p2a2_g1")))) %>% as.tibble()
+
 pop
 ```
 
 heritability simulate population
 ================================
-simple 1 gene case
+Make offspring genotypes
 ```{r}
 pop <- pop %>%
   group_by(cross) %>%
-  mutate(p1pheno = (p1a1 + p1a2)*allelic.effect + rnorm(1,sd=sqrt(VarE)),
-         p2pheno = (p2a1 + p2a2)*allelic.effect + rnorm(1,sd=sqrt(VarE)),
-         midparent = (p1pheno + p2pheno)/2,
-         offspring = sum(sample(c(p1a1, p1a2, p2a1, p2a2),size = 2)) * allelic.effect + rnorm(1,sd=sqrt(VarE)))
+  mutate(o_a1_g1 = sample(c(p1a1_g1, p1a2_g1),size = 1),
+         o_a2_g1 = sample(c(p2a1_g1, p2a2_g1),size = 1))
+pop
+```
+
+
+heritability simulate population
+================================
+Calculate phenotypes, simple 1 gene case
+```{r}
+pop <- pop %>%
+  mutate(p1pheno_t1 = (p1a1_g1 + p1a2_g1)*allelic.effect1 +
+           rnorm(1,sd=sqrt(VarE)),
+         p2pheno_t1 = (p2a1_g1 + p2a2_g1)*allelic.effect1 +
+           rnorm(1,sd=sqrt(VarE)),
+         midparent_t1 = (p1pheno_t1 + p2pheno_t1)/2,
+         offspring_t1 = (o_a1_g1 + o_a2_g1)*allelic.effect1 +
+            rnorm(1,sd=sqrt(VarE)))
 pop
 ```
 
@@ -82,7 +104,7 @@ heritability simulate population
 ================================
 ```{r}
 pop %>%
-  ggplot(aes(x=midparent, y=offspring)) +
+  ggplot(aes(x=midparent_t1, y=offspring_t1)) +
   geom_point() +
   geom_smooth(method = "lm")
 ```
@@ -92,26 +114,31 @@ heritability calculation 1
 $h^2$ can be calculated as $\frac{2*Cov(midparent, offspring)}{VarP}$
 
 ```{r}
-(cov.mp_off <- cov(pop$midparent, pop$offspring))
-(var.p <- var(c(pop$p1pheno, pop$p2pheno, pop$offspring)))
+(cov.mp_off <- cov(pop$midparent_t1, pop$offspring_t1))
+2*cov.mp_off # VarA
+(var.p <- var(c(pop$p1pheno_t1, pop$p2pheno_t1, pop$offspring_t1)))
 (h2 <- 2*cov.mp_off/var.p)
 ```
 
-sanity check for VarA
+Sanity check for VarA
+===========================
+This is the true VarA based on genotype
+
+Should be ~ 2 * Cov(midparent, offspring)
 ```{r}
 (var.a <- with(pop, var(c(
-  (p1a1 + p1a2)*allelic.effect,
-  (p2a1 + p2a2)*allelic.effect))))
+  (p1a1_g1 + p1a2_g1)*allelic.effect1,
+  (p2a1_g1 + p2a2_g1)*allelic.effect1))))
 ```
-
-
 
 heritability 2
 ============
-* One can also regress off-spring on mid-parent values to estimate heritability.
+incremental:true 
+
+* One can also regress offspring on mid-parent values to estimate heritability.
 * The slope of a regression line, $b$, between $x$ and $y$ is defined as $b=\frac{Cov(y,x)}{var(x)}$
 * $b=\frac{Cov(offspring, midparent)}{Var(midparent)}$
-* we already know that $Cov(offspring, midparent) = \frac{1}{2}VarA$
+* We already know that $Cov(offspring, midparent) = \frac{1}{2}VarA$
 * $Var(midparent)$ is expected to be $\frac{1}{2}VarP$
 * So the regression slope $\frac{\frac{1}{2}VarA}{\frac{1}{2}VarP} = \frac{VarA}{VarP} = h^2$
 
@@ -120,14 +147,101 @@ heritability 2 calculation
 * The regression slope $\frac{\frac{1}{2}VarA}{\frac{1}{2}VarP} = \frac{VarA}{VarP} = h^2$
 
 ```{r}
-summary(lm(offspring ~ midparent, data = pop))
+summary(lm(offspring_t1 ~ midparent_t1, data = pop))$coeff %>%
+  knitr::kable(digits=4)
 ```
 
-slightly different than calculation 1 because offspring variance not contributing to denominator(?)
+slightly different than calculation 1 because offspring variance not contributing to denominator calculation(?)
+
+ 
+A second trait
+========================
+controlled by both gene1 and gene2
+```{r}
+allele.freq2 <- 0.5
+allelic.effect2 <- 5
+gt2 <- cbind(cross=1:size,
+              matrix(sample(0:1, size=4*size, replace = TRUE, prob = c(allele.freq2, 1-allele.freq2)),
+                     ncol=4,
+                     dimnames=list(NULL, c("p1a1_g2", "p1a2_g2", "p2a1_g2", "p2a2_g2")))) %>% as.tibble()
+pop <- pop %>% inner_join(gt2)
+
+pop
+```
+
+gene2 offspring genotypes
+
+```{r}
+pop <- pop %>%
+  mutate(o_a1_g2 = sample(c(p1a1_g2, p1a2_g2),size = 1),
+         o_a2_g2 = sample(c(p2a1_g2, p2a2_g2),size = 1))
+```
 
 
-Covar
-=====
+trait2 simulate phenotypes
+================================
+trait2 controlled by gene1 and gene2
+```{r}
+t2_prg1 <- .5 #proportion of t2 phenotype due to gene 1
+pop <- pop %>%
+  group_by(cross) %>%
+  mutate(p1pheno_t2 = (p1a1_g1 + p1a2_g1)*allelic.effect1*t2_prg1 +
+           (p1a1_g2 + p1a2_g2)*allelic.effect2*(1-t2_prg1) +
+           rnorm(1,sd=sqrt(VarE)),
+         p2pheno_t2 = (p2a1_g1 + p2a2_g1)*allelic.effect1*t2_prg1 +
+           (p2a1_g2 + p2a2_g2)*allelic.effect2*(1-t2_prg1) +
+           rnorm(1,sd=sqrt(VarE)),
+         midparent_t2 = (p1pheno_t2 + p2pheno_t2)/2,
+         offspring_t2 = (o_a1_g1 + o_a2_g1)*allelic.effect2*t2_prg1 +
+           (o_a1_g2 + o_a2_g2)*allelic.effect2*(1-t2_prg1) +
+           rnorm(1,sd=sqrt(VarE)))
+pop
+```
 
+Genetic variance co-variance
+======================================
+Variance covariance with midparent against offspring
+```{r}
+(G <- 2*with(pop,
+             var(cbind(midparent_t1, midparent_t2),
+                 cbind(offspring_t1, offspring_t2))))
+```
 
+Note that the diagonal is VarA for the traits
+
+Phenotypic variance co-variance
+===============================
+```{r}
+t1 <- pop %>% ungroup() %>%
+  select(p1pheno_t1, p2pheno_t1, offspring_t1) %>% unlist()
+
+t2 <- pop %>% ungroup() %>%
+  select(p1pheno_t2, p2pheno_t2, offspring_t2) %>% unlist()
+
+(P <- var(cbind(t1,t2)))
+```
+
+Note: diagonal is VarP
+
+G X P-1
+=============
+```{r}
+G %*% MASS::ginv(P)
+```
+
+Note: diagonal should be heritability
+
+Resopnse to selection only on trait1:
+==========================
+```{r}
+s <- c(2,0)
+G %*% MASS::ginv(P) %*% s
+```
+
+Response to selection only on trait2:
+==========================
+```{r}
+s <- c(0,2)
+G %*% MASS::ginv(P) %*% s
+```
 
