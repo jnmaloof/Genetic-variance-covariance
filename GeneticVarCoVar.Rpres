@@ -1,0 +1,133 @@
+Estimating Genetic Variance CoVariance Matrix
+========================================================
+author: Julin Maloof
+date: Feb 12, 2019
+autosize: true
+
+```{r, include=FALSE}
+library(tidyverse)
+```
+
+
+univariate and multivariate breeders equations
+==========
+Remember the breeders equations:
+
+### Univariate: 
+
+$$ r = h^2 s $$
+
+where   $\: h^2 = \frac{VarA}{VarG}$ 
+
+univariate and multivariate breeders equations
+==========
+Remember the breeders equations:
+
+### Univariate: 
+
+$$ r = h^2 s $$
+
+where   $\: h^2 = \frac{VarA}{VarG}$ 
+
+### multivariate:
+
+$$\Delta Z = G P^{-1} s $$
+
+Where $G$ is the Genetic variance co-variance matrix and $P$ is the Phenotypic variance co-variance matrix.
+
+Thus $\, G P^{-1}$ is the multivariate equivalent of $h^2$
+
+heritability
+============
+* Given the relationship between $\, h^2$ and $\, GP^{-1}$, let's start with calcualting heritability.
+* Heritabilty can be calcualted using the resemblence between relatives.
+* One common method is to use offspring and midparent values
+    - Consider proportion of alleles in offspring that will be identical by descent (IBD).
+    - 4 alleles (2 from each parent) contribute to mid-parent value.  Each progeny will get 2 of these 4
+    - Thus, the covariance between offspring and midparent estimates $\,\frac{1}{2}VarA$
+    - $h^2$ can be calculated as $\frac{2*Cov(midparent, offspring)}{VarP}$
+
+
+heritability simulate population
+================================
+simple 1 gene case
+```{r}
+size <- 100
+allele.freq <- 0.5
+allelic.effect <- 5
+VarE <- 5
+pop <- tibble(
+  cross=1:size,
+  p1a1=sample(0:1, size = size, replace = TRUE, prob = c(allele.freq, 1-allele.freq)),
+  p1a2=sample(0:1, size = size, replace = TRUE, prob = c(allele.freq, 1-allele.freq)),
+  p2a1=sample(0:1, size = size, replace = TRUE, prob = c(allele.freq, 1-allele.freq)),
+  p2a2=sample(0:1, size = size, replace = TRUE, prob = c(allele.freq, 1-allele.freq)))
+pop
+```
+
+heritability simulate population
+================================
+simple 1 gene case
+```{r}
+pop <- pop %>%
+  group_by(cross) %>%
+  mutate(p1pheno = (p1a1 + p1a2)*allelic.effect + rnorm(1,sd=sqrt(VarE)),
+         p2pheno = (p2a1 + p2a2)*allelic.effect + rnorm(1,sd=sqrt(VarE)),
+         midparent = (p1pheno + p2pheno)/2,
+         offspring = sum(sample(c(p1a1, p1a2, p2a1, p2a2),size = 2)) * allelic.effect + rnorm(1,sd=sqrt(VarE)))
+pop
+```
+
+heritability simulate population
+================================
+```{r}
+pop %>%
+  ggplot(aes(x=midparent, y=offspring)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+heritability calculation 1
+================================
+$h^2$ can be calculated as $\frac{2*Cov(midparent, offspring)}{VarP}$
+
+```{r}
+(cov.mp_off <- cov(pop$midparent, pop$offspring))
+(var.p <- var(c(pop$p1pheno, pop$p2pheno, pop$offspring)))
+(h2 <- 2*cov.mp_off/var.p)
+```
+
+sanity check for VarA
+```{r}
+(var.a <- with(pop, var(c(
+  (p1a1 + p1a2)*allelic.effect,
+  (p2a1 + p2a2)*allelic.effect))))
+```
+
+
+
+heritability 2
+============
+* One can also regress off-spring on mid-parent values to estimate heritability.
+* The slope of a regression line, $b$, between $x$ and $y$ is defined as $b=\frac{Cov(y,x)}{var(x)}$
+* $b=\frac{Cov(offspring, midparent)}{Var(midparent)}$
+* we already know that $Cov(offspring, midparent) = \frac{1}{2}VarA$
+* $Var(midparent)$ is expected to be $\frac{1}{2}VarP$
+* So the regression slope $\frac{\frac{1}{2}VarA}{\frac{1}{2}VarP} = \frac{VarA}{VarP} = h^2$
+
+heritability 2 calculation
+============
+* The regression slope $\frac{\frac{1}{2}VarA}{\frac{1}{2}VarP} = \frac{VarA}{VarP} = h^2$
+
+```{r}
+summary(lm(offspring ~ midparent, data = pop))
+```
+
+slightly different than calculation 1 because offspring variance not contributing to denominator(?)
+
+
+Covar
+=====
+
+
+
